@@ -22,12 +22,25 @@ export async function POST(req: Request) {
 
     const call = body.call;
 
-    const { error } = await supabase.from("calls").insert({
-      call_id: call.call_id,
-      transcript: call.transcript ?? null,
-      caller_name: call.caller_name ?? null,
-      phone: call.from_number ?? null,
-    });
+    if (!call) {
+      return NextResponse.json({
+        success: true,
+      });
+    }
+
+    const { error } = await supabase
+      .from("calls")
+      .upsert(
+        {
+          call_id: call.call_id,
+          transcript: call.transcript ?? null,
+          caller_name: call.caller_name ?? null,
+          phone: call.from_number ?? null,
+        },
+        {
+          onConflict: "call_id",
+        }
+      );
 
     if (error) {
       console.error("Supabase Error:", error);
@@ -45,7 +58,9 @@ export async function POST(req: Request) {
       {
         success: false,
       },
-      { status: 500 }
+      {
+        status: 500,
+      }
     );
   }
 }
