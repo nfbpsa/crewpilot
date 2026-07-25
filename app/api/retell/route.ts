@@ -1,9 +1,16 @@
 import { NextResponse } from "next/server";
 
+export async function GET() {
+  return NextResponse.json({
+    success: true,
+    message: "CrewPilot Retell webhook is live.",
+  });
+}
+
 export async function POST(req: Request) {
   const body = await req.json();
 
-  console.log("RETELL WEBHOOK");
+  console.log("========== RETELL WEBHOOK ==========");
   console.log(JSON.stringify(body, null, 2));
 
   return NextResponse.json({
