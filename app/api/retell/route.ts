@@ -24,24 +24,27 @@ export async function POST(req: Request) {
 
     const { error } = await supabase.from("calls").insert({
       call_id: call.call_id,
-      transcript: call.transcript,
-      duration: call.duration_ms,
+      transcript: call.transcript ?? null,
       caller_name: call.caller_name ?? null,
       phone: call.from_number ?? null,
     });
 
     if (error) {
-      console.error(error);
+      console.error("Supabase Error:", error);
     } else {
       console.log("✅ Call saved");
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+    });
   } catch (err) {
-    console.error(err);
+    console.error("Server Error:", err);
 
     return NextResponse.json(
-      { success: false },
+      {
+        success: false,
+      },
       { status: 500 }
     );
   }
