@@ -28,9 +28,7 @@ export async function POST(req: Request) {
     const call = body.call;
 
     if (!call) {
-      return NextResponse.json({
-        success: true,
-      });
+      return NextResponse.json({ success: true });
     }
 
     const transcript = call.transcript ?? "";
@@ -43,34 +41,46 @@ export async function POST(req: Request) {
       status: "New Lead",
     };
 
+    if (!process.env.OPENAI_API_KEY) {
+      console.error("❌ OPENAI_API_KEY is missing.");
+    }
+
     if (transcript.length > 20) {
       try {
+        console.log("Calling OpenAI...");
+
         const response = await openai.responses.create({
           model: "gpt-5.5",
           input: `
-You are an AI assistant for a contractor's receptionist.
+Read this contractor phone call.
 
-Read this phone call transcript.
-
-Return ONLY valid JSON.
+Return ONLY JSON.
 
 {
-  "summary": "",
-  "service": "",
-  "city": "",
-  "customer_type": "",
-  "status": "New Lead"
+  "summary":"",
+  "service":"",
+  "city":"",
+  "customer_type":"",
+  "status":"New Lead"
 }
 
 Transcript:
 
 ${transcript}
 `,
+          text: {
+            format: {
+              type: "json_object",
+            },
+          },
         });
+
+        console.log("========== OPENAI RAW ==========");
+        console.log(JSON.stringify(response, null, 2));
 
         const text = response.output_text;
 
-        console.log("========== OPENAI RESPONSE ==========");
+        console.log("========== OPENAI TEXT ==========");
         console.log(text);
 
         ai = JSON.parse(text);
@@ -80,10 +90,15 @@ ${transcript}
       } catch (err) {
         console.error("========== OPENAI ERROR ==========");
         console.error(err);
+
+        if (err instanceof Error) {
+          console.error(err.message);
+          console.error(err.stack);
+        }
       }
     }
 
-    console.log("========== SAVING TO SUPABASE ==========");
+    console.log("========== SAVING ==========");
     console.log(ai);
 
     const { error } = await supabase
