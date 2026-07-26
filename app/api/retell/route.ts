@@ -1,10 +1,15 @@
 import { createClient } from "@supabase/supabase-js";
+import OpenAI from "openai";
 import { NextResponse } from "next/server";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 export async function GET() {
   return NextResponse.json({
@@ -28,14 +33,73 @@ export async function POST(req: Request) {
       });
     }
 
+    const transcript = call.transcript ?? "";
+
+    let ai = {
+      summary: null,
+      service: null,
+      city: null,
+      customer_type: null,
+      status: "New Lead",
+    };
+
+    if (transcript.length > 20) {
+      try {
+        const response = await openai.responses.create({
+          model: "gpt-5.5",
+          input: `
+You are an AI assistant for a contractor's receptionist.
+
+Read this phone call transcript.
+
+Return ONLY valid JSON.
+
+{
+  "summary": "",
+  "service": "",
+  "city": "",
+  "customer_type": "",
+  "status": "New Lead"
+}
+
+Transcript:
+
+${transcript}
+`,
+        });
+
+        const text = response.output_text;
+
+        console.log("========== OPENAI RESPONSE ==========");
+        console.log(text);
+
+        ai = JSON.parse(text);
+
+        console.log("========== PARSED AI ==========");
+        console.log(ai);
+      } catch (err) {
+        console.error("========== OPENAI ERROR ==========");
+        console.error(err);
+      }
+    }
+
+    console.log("========== SAVING TO SUPABASE ==========");
+    console.log(ai);
+
     const { error } = await supabase
       .from("calls")
       .upsert(
         {
           call_id: call.call_id,
-          transcript: call.transcript ?? null,
           caller_name: call.caller_name ?? null,
           phone: call.from_number ?? null,
+          transcript,
+
+          summary: ai.summary,
+          service: ai.service,
+          city: ai.city,
+          customer_type: ai.customer_type,
+          status: ai.status,
         },
         {
           onConflict: "call_id",
@@ -43,7 +107,8 @@ export async function POST(req: Request) {
       );
 
     if (error) {
-      console.error("Supabase Error:", error);
+      console.error("========== SUPABASE ERROR ==========");
+      console.error(error);
     } else {
       console.log("✅ Call saved");
     }
@@ -52,7 +117,8 @@ export async function POST(req: Request) {
       success: true,
     });
   } catch (err) {
-    console.error("Server Error:", err);
+    console.error("========== SERVER ERROR ==========");
+    console.error(err);
 
     return NextResponse.json(
       {
