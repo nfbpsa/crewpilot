@@ -51,78 +51,79 @@ export async function POST(req: Request) {
     if (transcript.length > 20) {
       try {
         console.log("Calling OpenAI...");
-
         console.log("🚀 USING JSON_SCHEMA VERSION");
-        const response = await openai.responses.create({
-  model: "gpt-5.5",
 
-  input: `
+        const response = await openai.responses.create({
+          model: "gpt-5.5",
+
+          input: `
 You extract structured lead information from contractor phone calls.
 
-Return:
-
-- customer_name = caller's full name
-- phone = best callback phone number
-- summary = concise summary of the call
-- service = requested service
-- city = city and state
-- customer_type = Residential or Commercial
-- timeline = chronological bullet list of everything discussed
-- status = "New Lead"
+Return ONLY valid JSON.
 
 Transcript:
 
 ${transcript}
 `,
 
-  text: {
-    format: {
-      type: "json_schema",
-      name: "contractor_lead",
-      strict: true,
-      schema: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          customer_name: {
-            type: "string",
+          text: {
+            format: {
+              type: "json_schema",
+              name: "contractor_lead",
+              strict: true,
+              schema: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  customer_name: {
+                    type: "string",
+                  },
+                  phone: {
+                    type: "string",
+                  },
+                  summary: {
+                    type: "string",
+                  },
+                  service: {
+                    type: "string",
+                  },
+                  city: {
+                    type: "string",
+                  },
+                  customer_type: {
+                    type: "string",
+                  },
+                  timeline: {
+                    type: "string",
+                  },
+                  status: {
+                    type: "string",
+                  },
+                },
+                required: [
+                  "customer_name",
+                  "phone",
+                  "summary",
+                  "service",
+                  "city",
+                  "customer_type",
+                  "timeline",
+                  "status",
+                ],
+              },
+            },
           },
-          phone: {
-            type: "string",
-          },
-          summary: {
-            type: "string",
-          },
-          service: {
-            type: "string",
-          },
-          city: {
-            type: "string",
-          },
-          customer_type: {
-            type: "string",
-          },
-          timeline: {
-            type: "string",
-          },
-          status: {
-            type: "string",
-          },
-        },
-        required: [
-          "customer_name",
-          "phone",
-          "summary",
-          "service",
-          "city",
-          "customer_type",
-          "timeline",
-          "status",
-        ],
-      },
-    },
-  },
-});
+        });
+
+        console.log("========== OPENAI RESPONSE ==========");
+        console.dir(response, { depth: null });
+
+        console.log("========== OUTPUT TEXT ==========");
+        console.log(response.output_text);
+
+        if (response.output_text) {
+          ai = JSON.parse(response.output_text);
+        }
 
         console.log("========== PARSED AI ==========");
         console.log(ai);
@@ -135,29 +136,27 @@ ${transcript}
     console.log("========== SAVING ==========");
     console.log(ai);
 
-    const { error } = await supabase
-      .from("calls")
-      .upsert(
-        {
-          call_id: call.call_id,
+    const { error } = await supabase.from("calls").upsert(
+      {
+        call_id: call.call_id,
 
-          caller_name: ai.customer_name ?? call.caller_name ?? null,
+        caller_name: ai.customer_name ?? call.caller_name ?? null,
 
-          phone: ai.phone ?? call.from_number ?? null,
+        phone: ai.phone ?? call.from_number ?? null,
 
-          transcript,
+        transcript,
 
-          summary: ai.summary,
-          service: ai.service,
-          city: ai.city,
-          customer_type: ai.customer_type,
-          timeline: ai.timeline,
-          status: ai.status,
-        },
-        {
-          onConflict: "call_id",
-        }
-      );
+        summary: ai.summary,
+        service: ai.service,
+        city: ai.city,
+        customer_type: ai.customer_type,
+        timeline: ai.timeline,
+        status: ai.status,
+      },
+      {
+        onConflict: "call_id",
+      }
+    );
 
     if (error) {
       console.error("========== SUPABASE ERROR ==========");
