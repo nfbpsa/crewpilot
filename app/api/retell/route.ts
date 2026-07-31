@@ -34,67 +34,101 @@ export async function POST(req: Request) {
     const transcript = call.transcript ?? "";
 
     let ai = {
-      summary: null,
-      service: null,
-      city: null,
-      customer_type: null,
+      customer_name: null as string | null,
+      phone: null as string | null,
+      summary: null as string | null,
+      service: null as string | null,
+      city: null as string | null,
+      customer_type: null as string | null,
+      timeline: null as string | null,
       status: "New Lead",
     };
 
     if (!process.env.OPENAI_API_KEY) {
-      console.error("❌ OPENAI_API_KEY is missing.");
+      console.error("❌ OPENAI_API_KEY missing");
     }
 
     if (transcript.length > 20) {
       try {
         console.log("Calling OpenAI...");
 
+        console.log("🚀 USING JSON_SCHEMA VERSION");
         const response = await openai.responses.create({
-          model: "gpt-5.5",
-          input: `
-Read this contractor phone call.
+  model: "gpt-5.5",
 
-Return ONLY JSON.
+  input: `
+You extract structured lead information from contractor phone calls.
 
-{
-  "summary":"",
-  "service":"",
-  "city":"",
-  "customer_type":"",
-  "status":"New Lead"
-}
+Return:
+
+- customer_name = caller's full name
+- phone = best callback phone number
+- summary = concise summary of the call
+- service = requested service
+- city = city and state
+- customer_type = Residential or Commercial
+- timeline = chronological bullet list of everything discussed
+- status = "New Lead"
 
 Transcript:
 
 ${transcript}
 `,
-          text: {
-            format: {
-              type: "json_object",
-            },
+
+  text: {
+    format: {
+      type: "json_schema",
+      name: "contractor_lead",
+      strict: true,
+      schema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          customer_name: {
+            type: "string",
           },
-        });
-
-        console.log("========== OPENAI RAW ==========");
-        console.log(JSON.stringify(response, null, 2));
-
-        const text = response.output_text;
-
-        console.log("========== OPENAI TEXT ==========");
-        console.log(text);
-
-        ai = JSON.parse(text);
+          phone: {
+            type: "string",
+          },
+          summary: {
+            type: "string",
+          },
+          service: {
+            type: "string",
+          },
+          city: {
+            type: "string",
+          },
+          customer_type: {
+            type: "string",
+          },
+          timeline: {
+            type: "string",
+          },
+          status: {
+            type: "string",
+          },
+        },
+        required: [
+          "customer_name",
+          "phone",
+          "summary",
+          "service",
+          "city",
+          "customer_type",
+          "timeline",
+          "status",
+        ],
+      },
+    },
+  },
+});
 
         console.log("========== PARSED AI ==========");
         console.log(ai);
       } catch (err) {
         console.error("========== OPENAI ERROR ==========");
         console.error(err);
-
-        if (err instanceof Error) {
-          console.error(err.message);
-          console.error(err.stack);
-        }
       }
     }
 
@@ -106,14 +140,18 @@ ${transcript}
       .upsert(
         {
           call_id: call.call_id,
-          caller_name: call.caller_name ?? null,
-          phone: call.from_number ?? null,
+
+          caller_name: ai.customer_name ?? call.caller_name ?? null,
+
+          phone: ai.phone ?? call.from_number ?? null,
+
           transcript,
 
           summary: ai.summary,
           service: ai.service,
           city: ai.city,
           customer_type: ai.customer_type,
+          timeline: ai.timeline,
           status: ai.status,
         },
         {
