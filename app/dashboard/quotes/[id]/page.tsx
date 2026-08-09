@@ -123,7 +123,7 @@ export default async function QuotePage({ params }: Props) {
     customerName={quote.customer_name || "Customer"}
     phone={quote.phone}
     total={Number(quote.total_price ?? 0)}
-    quoteUrl={`http://localhost:3000/dashboard/quotes/${quote.id}`}
+   quoteUrl={`https://crewpilot-taupe.vercel.app/q/${quote.id}`}
   />
 
   <PrintButton />
