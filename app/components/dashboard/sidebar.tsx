@@ -1,43 +1,93 @@
 "use client";
 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Phone,
   Users,
+  FileText,
   Settings,
 } from "lucide-react";
 
+const navItems = [
+  {
+    name: "Dashboard",
+    href: "/dashboard",
+    icon: LayoutDashboard,
+  },
+  {
+    name: "Calls",
+    href: "/dashboard/calls",
+    icon: Phone,
+  },
+    {
+    name: "Leads",
+    href: "/dashboard/leads",
+    icon: Users,
+  },
+  {
+    name: "Quotes",
+    href: "/dashboard/quotes",
+    icon: FileText,
+  },
+  {
+    name: "Settings",
+    href: "/dashboard/settings",
+    icon: Settings,
+  },
+];
+
 export default function Sidebar() {
+  const pathname = usePathname();
+
   return (
-    <aside className="w-64 bg-slate-950 text-white flex flex-col p-6">
-      <h1 className="text-2xl font-bold mb-10">
-        CrewPilot
-      </h1>
+    <aside className="flex w-64 flex-col border-r border-slate-800 bg-slate-950 text-white">
+      <div className="border-b border-slate-800 px-8 py-8">
+        <h1 className="text-3xl font-bold tracking-tight">
+          CrewPilot
+        </h1>
 
-      <nav className="space-y-2">
-        <button className="flex w-full items-center gap-3 rounded-lg px-4 py-3 bg-slate-800">
-          <LayoutDashboard size={18} />
-          Dashboard
-        </button>
+        <p className="mt-2 text-sm text-slate-400">
+          AI Contractor CRM
+        </p>
+      </div>
 
-        <button className="flex w-full items-center gap-3 rounded-lg px-4 py-3 hover:bg-slate-900">
-          <Phone size={18} />
-          Calls
-        </button>
+      <nav className="flex-1 space-y-2 p-5">
+        {navItems.map((item) => {
+          const Icon = item.icon;
 
-        <button className="flex w-full items-center gap-3 rounded-lg px-4 py-3 hover:bg-slate-900">
-          <Users size={18} />
-          Leads
-        </button>
+          const active =
+            pathname === item.href ||
+            pathname.startsWith(item.href + "/");
 
-        <button className="flex w-full items-center gap-3 rounded-lg px-4 py-3 hover:bg-slate-900">
-          <Settings size={18} />
-          Settings
-        </button>
+          return (
+            <Link
+              key={item.name}
+              href={item.href}
+              className={`flex items-center gap-3 rounded-xl px-4 py-3 font-medium transition-all duration-200 ${
+                active
+                  ? "bg-blue-600 text-white shadow-lg"
+                  : "text-slate-300 hover:bg-slate-900 hover:text-white"
+              }`}
+            >
+              <Icon size={19} />
+              {item.name}
+            </Link>
+          );
+        })}
       </nav>
 
-      <div className="mt-auto text-sm text-slate-400">
-        CrewPilot v1.0
+      <div className="border-t border-slate-800 p-5">
+        <div className="rounded-xl bg-slate-900 p-4">
+          <p className="text-sm font-semibold">
+            CrewPilot v1.0
+          </p>
+
+          <p className="mt-1 text-xs text-slate-400">
+            AI Receptionist Connected
+          </p>
+        </div>
       </div>
     </aside>
   );
