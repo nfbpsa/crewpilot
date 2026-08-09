@@ -8,7 +8,8 @@ export default async function QuotesPage() {
     .order("created_at", { ascending: false });
 
   return (
-    <div>
+    <div className="mx-auto w-full max-w-7xl px-6 py-8">
+      {/* Back to Dashboard */}
       <div className="mb-6">
         <Link
           href="/dashboard"
@@ -18,9 +19,10 @@ export default async function QuotesPage() {
         </Link>
       </div>
 
+      {/* Page Header */}
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-4xl font-bold">
+          <h1 className="text-4xl font-bold text-slate-900">
             Quotes
           </h1>
 
@@ -31,13 +33,14 @@ export default async function QuotesPage() {
 
         <Link
           href="/dashboard/quotes/new"
-          className="rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white hover:bg-blue-700"
+          className="rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white transition hover:bg-blue-700"
         >
           New Quote
         </Link>
       </div>
 
-      <div className="overflow-hidden rounded-2xl border bg-white shadow-sm">
+      {/* Quotes Table */}
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full">
           <thead className="bg-slate-900 text-white">
             <tr>
@@ -63,7 +66,7 @@ export default async function QuotesPage() {
             {quotes?.map((quote) => (
               <tr
                 key={quote.id}
-                className="border-b hover:bg-slate-50"
+                className="border-b border-slate-200 last:border-b-0 hover:bg-slate-50"
               >
                 <td className="px-6 py-5">
                   <Link
@@ -83,7 +86,7 @@ export default async function QuotesPage() {
                 </td>
 
                 <td className="px-6 py-5">
-                  {quote.status}
+                  {quote.status || "Draft"}
                 </td>
               </tr>
             ))}
