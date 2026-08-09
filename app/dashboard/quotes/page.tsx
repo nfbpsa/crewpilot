@@ -8,7 +8,15 @@ export default async function QuotesPage() {
     .order("created_at", { ascending: false });
 
   return (
-    <div className="mx-auto max-w-7xl p-8">
+    <div>
+      <div className="mb-6">
+        <Link
+          href="/dashboard"
+          className="text-sm font-medium text-blue-600 transition hover:text-blue-700"
+        >
+          ← Back to Dashboard
+        </Link>
+      </div>
 
       <div className="mb-8 flex items-center justify-between">
         <div>
@@ -30,13 +38,9 @@ export default async function QuotesPage() {
       </div>
 
       <div className="overflow-hidden rounded-2xl border bg-white shadow-sm">
-
         <table className="w-full">
-
           <thead className="bg-slate-900 text-white">
-
             <tr>
-
               <th className="px-6 py-4 text-left">
                 Customer
               </th>
@@ -52,29 +56,22 @@ export default async function QuotesPage() {
               <th className="px-6 py-4 text-left">
                 Status
               </th>
-
             </tr>
-
           </thead>
 
           <tbody>
-
             {quotes?.map((quote) => (
-
               <tr
                 key={quote.id}
                 className="border-b hover:bg-slate-50"
               >
-
                 <td className="px-6 py-5">
-
                   <Link
                     href={`/dashboard/quotes/${quote.id}`}
                     className="font-semibold text-blue-600 hover:underline"
                   >
                     {quote.customer_name}
                   </Link>
-
                 </td>
 
                 <td className="px-6 py-5">
@@ -88,17 +85,11 @@ export default async function QuotesPage() {
                 <td className="px-6 py-5">
                   {quote.status}
                 </td>
-
               </tr>
-
             ))}
-
           </tbody>
-
         </table>
-
       </div>
-
     </div>
   );
 }
