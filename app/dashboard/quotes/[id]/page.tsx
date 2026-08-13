@@ -65,7 +65,7 @@ export default async function QuotePage({ params }: Props) {
   const squareFeet = Number(quote.square_feet ?? 0);
   const pricePerSqFt = Number(quote.price_per_sqft ?? 0);
 
-  const sealcoatingTotal = squareFeet * pricePerSqFt;
+  const serviceTotal = squareFeet * pricePerSqFt;
 
   return (
     <>
@@ -92,6 +92,7 @@ export default async function QuotePage({ params }: Props) {
 
       <div className="min-h-screen bg-slate-100 print:min-h-0 print:bg-white">
         <div className="mx-auto max-w-7xl p-8 print:max-w-none print:p-0">
+
           {/* Screen Header */}
           <div className="flex flex-col justify-between gap-6 md:flex-row md:items-center print:hidden">
             <div>
@@ -111,28 +112,28 @@ export default async function QuotePage({ params }: Props) {
               </p>
             </div>
 
-           <div className="flex items-center gap-3">
-  <Link
-    href={`/dashboard/quotes/${quote.id}/edit`}
-    className="rounded-xl border border-slate-300 bg-white px-5 py-3 font-semibold text-slate-700 transition hover:bg-slate-50"
-  >
-    Edit Quote
-  </Link>
+            <div className="flex items-center gap-3">
+              <Link
+                href={`/dashboard/quotes/${quote.id}/edit`}
+                className="rounded-xl border border-slate-300 bg-white px-5 py-3 font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Edit Quote
+              </Link>
 
-  <SendQuoteButton
-    customerName={quote.customer_name || "Customer"}
-    phone={quote.phone}
-    total={Number(quote.total_price ?? 0)}
-   quoteUrl={`https://crewpilot-taupe.vercel.app/q/${quote.id}`}
-  />
+              <SendQuoteButton
+                customerName={quote.customer_name || "Customer"}
+                phone={quote.phone}
+                total={Number(quote.total_price ?? 0)}
+                quoteUrl={`https://crewpilot-taupe.vercel.app/q/${quote.id}`}
+              />
 
-  <PrintButton />
-</div> 
+              <PrintButton />
+            </div>
           </div>
 
           {/* Printable Quote */}
           <div className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm print:mt-0 print:rounded-none print:border-0 print:shadow-none">
-            
+
             {/* Print Header */}
             <div className="hidden border-b border-slate-200 px-7 py-4 print:block">
               <div className="flex items-start justify-between">
@@ -171,7 +172,10 @@ export default async function QuotePage({ params }: Props) {
                   </h2>
 
                   <p className="mt-1 text-sm text-slate-500">
-                    {quote.service || "Service"}
+                    {quote.service
+                      ? quote.service.charAt(0).toUpperCase() +
+                        quote.service.slice(1)
+                      : "Service"}
                   </p>
                 </div>
 
@@ -233,7 +237,10 @@ export default async function QuotePage({ params }: Props) {
                   </p>
 
                   <p className="mt-1 text-sm font-semibold text-slate-900">
-                    {quote.service || "—"}
+                    {quote.service
+                      ? quote.service.charAt(0).toUpperCase() +
+                        quote.service.slice(1)
+                      : "—"}
                   </p>
                 </div>
 
@@ -288,11 +295,14 @@ export default async function QuotePage({ params }: Props) {
 
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600">
-                    Sealcoating
+                    {quote.service
+                      ? quote.service.charAt(0).toUpperCase() +
+                        quote.service.slice(1)
+                      : "Service"}
                   </span>
 
                   <span className="font-medium text-slate-900">
-                    {money(sealcoatingTotal)}
+                    {money(serviceTotal)}
                   </span>
                 </div>
 
@@ -363,6 +373,7 @@ export default async function QuotePage({ params }: Props) {
                 </span>
               </div>
             </div>
+
           </div>
         </div>
       </div>
