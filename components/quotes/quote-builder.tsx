@@ -55,12 +55,16 @@ export default function QuoteBuilder({ call }: Props) {
 
   const lengthNumber = Number(length) || 0;
   const widthNumber = Number(width) || 0;
+
   const pricePerSqFtNumber =
     Number(pricePerSqFt) || 0;
+
   const materialCostNumber =
     Number(materialCost) || 0;
+
   const laborCostNumber =
     Number(laborCost) || 0;
+
   const miscCostNumber =
     Number(miscCost) || 0;
 
@@ -87,6 +91,11 @@ export default function QuoteBuilder({ call }: Props) {
       miscCostNumber,
     ]
   );
+
+  const displayService = service.trim()
+    ? service.trim().charAt(0).toUpperCase() +
+      service.trim().slice(1)
+    : "Service";
 
   return (
     <form
@@ -146,7 +155,7 @@ export default function QuoteBuilder({ call }: Props) {
               onChange={(e) =>
                 setService(e.target.value)
               }
-              placeholder="e.g. Sealcoating"
+              placeholder="Enter service"
               className="w-full rounded-xl border border-slate-300 p-3"
             />
           </div>
@@ -334,7 +343,7 @@ export default function QuoteBuilder({ call }: Props) {
 
           <div className="flex justify-between">
             <span className="text-slate-600">
-              Sealcoating
+              {displayService}
             </span>
 
             <span className="font-medium">
