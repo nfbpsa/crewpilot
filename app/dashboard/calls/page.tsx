@@ -54,12 +54,21 @@ export default async function CallsPage() {
   return (
     <main className="min-h-screen bg-slate-50">
       <div className="mx-auto max-w-7xl px-6 py-10">
+
+        {/* Back to Dashboard */}
+        <Link
+          href="/dashboard"
+          className="mb-6 inline-flex items-center text-sm font-medium text-slate-500 transition hover:text-slate-900"
+        >
+          ← Back to Dashboard
+        </Link>
+
         {/* Header */}
-        <div className="mb-8 flex items-start justify-between gap-6">
+        <div className="mb-8 flex items-start justify-between">
           <div>
-            <p className="text-sm font-semibold text-blue-600">
+            <div className="text-sm font-semibold text-blue-600">
               CrewPilot
-            </p>
+            </div>
 
             <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">
               Calls

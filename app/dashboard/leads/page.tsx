@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { supabaseServer } from "@/lib/supabase-server";
 
 export default async function LeadsPage() {
@@ -14,11 +15,20 @@ export default async function LeadsPage() {
   return (
     <main className="min-h-screen bg-slate-50">
       <div className="mx-auto max-w-7xl px-6 py-10">
-        <div className="mb-8 flex items-end justify-between">
+        {/* Back to Dashboard */}
+        <Link
+          href="/dashboard"
+          className="mb-6 inline-flex items-center text-sm font-medium text-slate-500 transition hover:text-slate-900"
+        >
+          ← Back to Dashboard
+        </Link>
+
+        {/* Header */}
+        <div className="mb-8 flex items-start justify-between">
           <div>
-            <p className="text-sm font-semibold text-blue-600">
+            <div className="text-sm font-semibold text-blue-600">
               CrewPilot
-            </p>
+            </div>
 
             <h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">
               Leads
@@ -40,6 +50,7 @@ export default async function LeadsPage() {
           </div>
         </div>
 
+        {/* Leads Table */}
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           {leads && leads.length > 0 ? (
             <div className="overflow-x-auto">
