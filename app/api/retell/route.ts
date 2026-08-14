@@ -7,6 +7,10 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+// Your CrewOS account
+const CREWOS_USER_ID = "51366006-9380-4040-8acd-f930c90dafe0";
+const CREWOS_USER_EMAIL = "rprofits@hotmail.com";
+
 export async function GET() {
   return NextResponse.json({
     success: true,
@@ -86,6 +90,7 @@ You extract structured lead information from contractor phone calls.
 Read the transcript carefully and extract as much information as the caller actually provides.
 
 IMPORTANT:
+
 - Do not invent information.
 - If a field is not mentioned, return null.
 - Keep phone numbers exactly as provided when possible.
@@ -273,13 +278,13 @@ ${transcript}
 
     /*
      * ============================================================
-     * SAVE TO SUPABASE
+     * SAVE CALL TO SUPABASE
      * ============================================================
      */
 
-    console.log("========== SAVING ==========");
+    console.log("========== SAVING CALL ==========");
 
-    const { data, error } = await supabaseServer
+    const { data: savedCall, error: callError } = await supabaseServer
       .from("calls")
       .upsert(
         {
@@ -338,19 +343,20 @@ ${transcript}
           onConflict: "call_id",
         }
       )
-      .select();
+      .select()
+      .single();
 
-    console.log("========== SAVED ROW ==========");
-    console.dir(data, { depth: null });
+    console.log("========== SAVED CALL ==========");
+    console.dir(savedCall, { depth: null });
 
-    if (error) {
-      console.error("========== SUPABASE ERROR ==========");
-      console.error(error);
+    if (callError) {
+      console.error("========== SUPABASE CALL ERROR ==========");
+      console.error(callError);
 
       return NextResponse.json(
         {
           success: false,
-          error: error.message,
+          error: callError.message,
         },
         {
           status: 500,
@@ -360,10 +366,154 @@ ${transcript}
 
     console.log("✅ Call saved successfully");
 
+    /*
+     * ============================================================
+     * CREATE LEAD
+     * ============================================================
+     *
+     * This takes the information extracted from the Retell call
+     * and creates a row in public.leads.
+     */
+
+    console.log("========== CREATING LEAD ==========");
+
+    // Build the address for the leads table
+    const addressParts = [
+      ai.street_address,
+      ai.city,
+      ai.state,
+      ai.zip_code,
+    ].filter(Boolean);
+
+    const address =
+      addressParts.length > 0
+        ? addressParts.join(", ")
+        : null;
+
+    // Convert estimated job value to a number when possible.
+    // Example: "$15,000" -> 15000
+    const estimateNumber = ai.estimated_job_value
+      ? Number(
+          ai.estimated_job_value.replace(/[^0-9.]/g, "")
+        )
+      : 0;
+
+    /*
+     * Check whether this call already created a lead.
+     *
+     * Your current leads table does not have call_id, so we use
+     * the combination of phone + name + service to avoid creating
+     * obvious duplicate rows when Retell retries the webhook.
+     */
+
+    let existingLead = null;
+
+    if (ai.phone) {
+      const { data: possibleLead, error: existingLeadError } =
+        await supabaseServer
+          .from("leads")
+          .select("id")
+          .eq("user_id", CREWOS_USER_ID)
+          .eq("phone", ai.phone)
+          .eq("name", ai.customer_name ?? "Unknown Customer")
+          .eq("service", ai.service)
+          .limit(1)
+          .maybeSingle();
+
+      if (existingLeadError) {
+        console.error(
+          "Existing lead lookup error:",
+          existingLeadError
+        );
+      }
+
+      existingLead = possibleLead;
+    }
+
+    if (existingLead) {
+      console.log(
+        "⚠️ Lead already exists:",
+        existingLead.id
+      );
+    } else {
+      const { data: newLead, error: leadError } =
+        await supabaseServer
+          .from("leads")
+          .insert({
+            user_id: CREWOS_USER_ID,
+
+            user_email: CREWOS_USER_EMAIL,
+
+            name:
+              ai.customer_name ??
+              call.caller_name ??
+              "Unknown Customer",
+
+            service: ai.service,
+
+            status: ai.status ?? "New Lead",
+
+            phone:
+              ai.phone ??
+              call.from_number ??
+              null,
+
+            email: ai.email,
+
+            address,
+
+            estimate:
+              Number.isFinite(estimateNumber)
+                ? estimateNumber
+                : 0,
+          })
+          .select()
+          .single();
+
+      console.log("========== NEW LEAD ==========");
+      console.dir(newLead, { depth: null });
+
+      if (leadError) {
+        console.error("========== LEAD INSERT ERROR ==========");
+        console.error(leadError);
+
+        /*
+         * The call itself was successfully saved.
+         * We return the error so we can see exactly what is wrong
+         * with the leads table if the insert fails.
+         */
+
+        return NextResponse.json(
+          {
+            success: false,
+            call_saved: true,
+            lead_created: false,
+            error: leadError.message,
+          },
+          {
+            status: 500,
+          }
+        );
+      }
+
+      console.log("✅ Lead created successfully");
+    }
+
+    /*
+     * ============================================================
+     * SUCCESS
+     * ============================================================
+     */
+
     return NextResponse.json({
       success: true,
+      call_saved: true,
+      lead_created: true,
+
       lead_score: leadScore.score,
       lead_priority: leadScore.priority,
+
+      call_id: call.call_id,
     });
   } catch (err) {
     console.error("========== SERVER ERROR ==========");

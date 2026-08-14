@@ -88,24 +88,31 @@ export default function EditQuoteBuilder({ quote }: Props) {
     [lengthNumber, widthNumber]
   );
 
-  const sealcoatingTotal = useMemo(
+  // Main service price
+  const serviceTotal = useMemo(
     () => squareFeet * pricePerSqFtNumber,
     [squareFeet, pricePerSqFtNumber]
   );
 
   const total = useMemo(
     () =>
-      sealcoatingTotal +
+      serviceTotal +
       materialCostNumber +
       laborCostNumber +
       miscCostNumber,
     [
-      sealcoatingTotal,
+      serviceTotal,
       materialCostNumber,
       laborCostNumber,
       miscCostNumber,
     ]
   );
+
+  // Capitalize the service name for display
+  const displayService = service.trim()
+    ? service.trim().charAt(0).toUpperCase() +
+      service.trim().slice(1)
+    : "Service";
 
   return (
     <form
@@ -350,11 +357,11 @@ export default function EditQuoteBuilder({ quote }: Props) {
 
           <div className="flex justify-between">
             <span className="text-slate-600">
-              Sealcoating
+              {displayService}
             </span>
 
             <span className="font-medium">
-              ${sealcoatingTotal.toFixed(2)}
+              ${serviceTotal.toFixed(2)}
             </span>
           </div>
 
