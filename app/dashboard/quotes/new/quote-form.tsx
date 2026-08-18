@@ -42,17 +42,8 @@ function normalizePhone(phone?: string | null) {
 
   const digits = converted.replace(/\D/g, "");
 
-  // Handle +1XXXXXXXXXX
-  const normalizedDigits =
-    digits.length === 11 && digits.startsWith("1")
-      ? digits.slice(1)
-      : digits;
-
-  if (normalizedDigits.length === 10) {
-    return `(${normalizedDigits.slice(0, 3)}) ${normalizedDigits.slice(
-      3,
-      6
-    )}-${normalizedDigits.slice(6)}`;
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
   }
 
   return phone;
@@ -61,54 +52,42 @@ function normalizePhone(phone?: string | null) {
 function formatPhoneInput(value: string) {
   const digits = value.replace(/\D/g, "").slice(0, 10);
 
-  if (digits.length === 0) {
-    return "";
-  }
-
   if (digits.length <= 3) {
-    return `(${digits}`;
+    return digits;
   }
 
   if (digits.length <= 6) {
     return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
   }
 
-  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(
-    6
-  )}`;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
 export default function QuoteForm({ lead }: Props) {
   const router = useRouter();
 
-  /*
-   * Everything below is initialized directly from the lead.
-   * This means clicking "Create Quote" from a lead should
-   * automatically populate the customer information.
-   */
-
   const [customerName, setCustomerName] = useState(
-    lead?.customer_name ? capitalizeFirst(lead.customer_name) : ""
+    capitalizeFirst(lead?.customer_name)
   );
 
   const [phone, setPhone] = useState(
-    lead?.phone ? normalizePhone(lead.phone) : ""
+    normalizePhone(lead?.phone)
   );
 
   const [customerType, setCustomerType] = useState(
-    lead?.customer_type ? capitalizeFirst(lead.customer_type) : ""
+    capitalizeFirst(lead?.customer_type)
   );
 
   const [service, setService] = useState(
-    lead?.service ? capitalizeFirst(lead.service) : ""
+    capitalizeFirst(lead?.service)
   );
 
   const [city, setCity] = useState(
-    lead?.city ? capitalizeFirst(lead.city) : ""
+    capitalizeFirst(lead?.city)
   );
 
   const [state, setState] = useState(
-    lead?.state ? capitalizeFirst(lead.state) : ""
+    capitalizeFirst(lead?.state)
   );
 
   const [description, setDescription] = useState(
@@ -123,23 +102,8 @@ export default function QuoteForm({ lead }: Props) {
 
   const [saving, setSaving] = useState(false);
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-
-    if (!customerName.trim()) {
-      alert("Please enter the customer name.");
-      return;
-    }
-
-    if (!service.trim()) {
-      alert("Please enter the service.");
-      return;
-    }
-
-    if (!price || Number(price) <= 0) {
-      alert("Please enter a quote amount.");
-      return;
-    }
 
     setSaving(true);
 
@@ -151,18 +115,15 @@ export default function QuoteForm({ lead }: Props) {
         },
         body: JSON.stringify({
           lead_id: lead?.call_id ?? null,
-
-          customer_name: customerName.trim(),
-          phone: phone.trim(),
-          customer_type: customerType.trim(),
-          service: service.trim(),
-          city: city.trim(),
-          state: state.trim(),
-
-          description: description.trim(),
-          total_price: Number(price),
-          notes: notes.trim(),
-
+          customer_name: customerName,
+          phone,
+          customer_type: customerType,
+          service,
+          city,
+          state,
+          description,
+          total_price: Number(price || 0),
+          notes,
           status: "Draft",
         }),
       });
@@ -170,30 +131,40 @@ export default function QuoteForm({ lead }: Props) {
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
 
-        console.error("Create quote error:", errorData);
+        console.error("Create quote failed:", errorData);
 
-        throw new Error("Failed to create quote");
+        throw new Error(
+          errorData?.error ||
+            errorData?.details ||
+            errorData?.message ||
+            "Failed to create quote"
+        );
       }
 
       router.push("/dashboard/quotes");
       router.refresh();
     } catch (error) {
-      console.error("Quote creation error:", error);
-      alert("Could not create quote. Please try again.");
+      console.error("Create quote error:", error);
+
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Could not create quote. Please try again.";
+
+      alert(message);
     } finally {
       setSaving(false);
     }
   }
 
   const inputClass =
-    "mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
+    "mt-2 w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100";
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
 
-      {/* CUSTOMER INFORMATION */}
+      {/* Customer Information */}
       <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-
         <h2 className="text-2xl font-bold text-slate-900">
           Customer Information
         </h2>
@@ -206,16 +177,11 @@ export default function QuoteForm({ lead }: Props) {
 
           {/* Customer Name */}
           <div>
-            <label
-              htmlFor="customer-name"
-              className="font-semibold text-slate-700"
-            >
+            <label className="font-semibold text-slate-700">
               Customer Name
             </label>
 
             <input
-              id="customer-name"
-              type="text"
               value={customerName}
               onChange={(e) =>
                 setCustomerName(capitalizeFirst(e.target.value))
@@ -228,15 +194,11 @@ export default function QuoteForm({ lead }: Props) {
 
           {/* Phone */}
           <div>
-            <label
-              htmlFor="phone"
-              className="font-semibold text-slate-700"
-            >
+            <label className="font-semibold text-slate-700">
               Phone
             </label>
 
             <input
-              id="phone"
               type="tel"
               value={phone}
               onChange={(e) =>
@@ -249,16 +211,11 @@ export default function QuoteForm({ lead }: Props) {
 
           {/* Customer Type */}
           <div>
-            <label
-              htmlFor="customer-type"
-              className="font-semibold text-slate-700"
-            >
+            <label className="font-semibold text-slate-700">
               Customer Type
             </label>
 
             <input
-              id="customer-type"
-              type="text"
               value={customerType}
               onChange={(e) =>
                 setCustomerType(capitalizeFirst(e.target.value))
@@ -270,16 +227,11 @@ export default function QuoteForm({ lead }: Props) {
 
           {/* Service */}
           <div>
-            <label
-              htmlFor="service"
-              className="font-semibold text-slate-700"
-            >
+            <label className="font-semibold text-slate-700">
               Service
             </label>
 
             <input
-              id="service"
-              type="text"
               value={service}
               onChange={(e) =>
                 setService(capitalizeFirst(e.target.value))
@@ -292,16 +244,11 @@ export default function QuoteForm({ lead }: Props) {
 
           {/* City */}
           <div>
-            <label
-              htmlFor="city"
-              className="font-semibold text-slate-700"
-            >
+            <label className="font-semibold text-slate-700">
               City
             </label>
 
             <input
-              id="city"
-              type="text"
               value={city}
               onChange={(e) =>
                 setCity(capitalizeFirst(e.target.value))
@@ -313,16 +260,11 @@ export default function QuoteForm({ lead }: Props) {
 
           {/* State */}
           <div>
-            <label
-              htmlFor="state"
-              className="font-semibold text-slate-700"
-            >
+            <label className="font-semibold text-slate-700">
               State
             </label>
 
             <input
-              id="state"
-              type="text"
               value={state}
               onChange={(e) =>
                 setState(capitalizeFirst(e.target.value))
@@ -335,49 +277,36 @@ export default function QuoteForm({ lead }: Props) {
         </div>
       </div>
 
-      {/* ESTIMATE */}
+      {/* Estimate */}
       <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-
         <h2 className="text-2xl font-bold text-slate-900">
           Estimate
         </h2>
 
         <div className="mt-6">
-
-          <label
-            htmlFor="description"
-            className="font-semibold text-slate-700"
-          >
+          <label className="font-semibold text-slate-700">
             Description
           </label>
 
           <textarea
-            id="description"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             className={`${inputClass} min-h-32`}
             placeholder="Describe the work being quoted..."
           />
-
         </div>
 
         <div className="mt-6">
-
-          <label
-            htmlFor="total-price"
-            className="font-semibold text-slate-700"
-          >
+          <label className="font-semibold text-slate-700">
             Total Price
           </label>
 
           <div className="relative mt-2">
-
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">
               $
             </span>
 
             <input
-              id="total-price"
               type="number"
               min="0"
               step="0.01"
@@ -387,15 +316,12 @@ export default function QuoteForm({ lead }: Props) {
               placeholder="0.00"
               required
             />
-
           </div>
         </div>
-
       </div>
 
-      {/* NOTES */}
+      {/* Notes */}
       <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-
         <h2 className="text-2xl font-bold text-slate-900">
           Notes to Customer
         </h2>
@@ -406,17 +332,15 @@ export default function QuoteForm({ lead }: Props) {
           className={`${inputClass} mt-6 min-h-32`}
           placeholder="Add any additional notes..."
         />
-
       </div>
 
-      {/* ACTIONS */}
+      {/* Actions */}
       <div className="flex flex-col-reverse gap-4 sm:flex-row sm:justify-end">
 
         <button
           type="button"
           onClick={() => router.back()}
-          disabled={saving}
-          className="rounded-xl border border-slate-300 bg-white px-6 py-3 font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-xl border border-slate-300 bg-white px-6 py-3 font-semibold text-slate-700 transition hover:bg-slate-50"
         >
           Cancel
         </button>
@@ -430,7 +354,6 @@ export default function QuoteForm({ lead }: Props) {
         </button>
 
       </div>
-
     </form>
   );
 }

@@ -74,7 +74,7 @@ export default async function CallDetailsPage({
         <div className="mb-6">
           <a
             href="/dashboard/calls"
-            className="text-sm font-medium text-blue-600 hover:text-blue-700"
+            className="text-sm font-medium text-slate-500 transition hover:text-slate-900"
           >
             ← Back to Calls
           </a>

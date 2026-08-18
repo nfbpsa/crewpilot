@@ -284,67 +284,68 @@ ${transcript}
 
     console.log("========== SAVING CALL ==========");
 
-    const { data: savedCall, error: callError } = await supabaseServer
-      .from("calls")
-      .upsert(
-        {
-          call_id: call.call_id,
+    const { data: savedCall, error: callError } =
+      await supabaseServer
+        .from("calls")
+        .upsert(
+          {
+            call_id: call.call_id,
 
-          caller_name:
-            ai.customer_name ??
-            call.caller_name ??
-            null,
+            caller_name:
+              ai.customer_name ??
+              call.caller_name ??
+              null,
 
-          phone:
-            ai.phone ??
-            call.from_number ??
-            null,
+            phone:
+              ai.phone ??
+              call.from_number ??
+              null,
 
-          email: ai.email,
+            email: ai.email,
 
-          ai_customer_name: ai.customer_name,
-          ai_phone: ai.phone,
+            ai_customer_name: ai.customer_name,
+            ai_phone: ai.phone,
 
-          street_address: ai.street_address,
-          city: ai.city,
-          state: ai.state,
-          zip_code: ai.zip_code,
+            street_address: ai.street_address,
+            city: ai.city,
+            state: ai.state,
+            zip_code: ai.zip_code,
 
-          service: ai.service,
-          project_type: ai.project_type,
+            service: ai.service,
+            project_type: ai.project_type,
 
-          customer_type: ai.customer_type,
+            customer_type: ai.customer_type,
 
-          budget: ai.budget,
-          callback_time: ai.callback_time,
-          decision_maker: ai.decision_maker,
+            budget: ai.budget,
+            callback_time: ai.callback_time,
+            decision_maker: ai.decision_maker,
 
-          materials: ai.materials,
+            materials: ai.materials,
 
-          estimated_job_value: ai.estimated_job_value,
+            estimated_job_value: ai.estimated_job_value,
 
-          priority: ai.priority,
-          next_action: ai.next_action,
+            priority: ai.priority,
+            next_action: ai.next_action,
 
-          summary: ai.summary,
-          timeline: ai.timeline,
+            summary: ai.summary,
+            timeline: ai.timeline,
 
-          lead_source: ai.lead_source,
+            lead_source: ai.lead_source,
 
-          status: ai.status,
+            status: ai.status,
 
-          transcript,
+            transcript,
 
-          lead_score: leadScore.score,
-          lead_priority: leadScore.priority,
-          lead_score_reasons: leadScore.reasons,
-        },
-        {
-          onConflict: "call_id",
-        }
-      )
-      .select()
-      .single();
+            lead_score: leadScore.score,
+            lead_priority: leadScore.priority,
+            lead_score_reasons: leadScore.reasons,
+          },
+          {
+            onConflict: "call_id",
+          }
+        )
+        .select()
+        .single();
 
     console.log("========== SAVED CALL ==========");
     console.dir(savedCall, { depth: null });
@@ -371,8 +372,8 @@ ${transcript}
      * CREATE LEAD
      * ============================================================
      *
-     * This takes the information extracted from the Retell call
-     * and creates a row in public.leads.
+     * This creates the CRM lead and connects it directly
+     * to the Retell call using leads.call_id.
      */
 
     console.log("========== CREATING LEAD ==========");
@@ -399,26 +400,28 @@ ${transcript}
       : 0;
 
     /*
-     * Check whether this call already created a lead.
+     * ============================================================
+     * CHECK FOR EXISTING LEAD
+     * ============================================================
      *
-     * Your current leads table does not have call_id, so we use
-     * the combination of phone + name + service to avoid creating
-     * obvious duplicate rows when Retell retries the webhook.
+     * IMPORTANT:
+     * leads.call_id is now the proper connection between
+     * the calls table and the leads table.
      */
 
     let existingLead = null;
 
-    if (ai.phone) {
-      const { data: possibleLead, error: existingLeadError } =
-        await supabaseServer
-          .from("leads")
-          .select("id")
-          .eq("user_id", CREWOS_USER_ID)
-          .eq("phone", ai.phone)
-          .eq("name", ai.customer_name ?? "Unknown Customer")
-          .eq("service", ai.service)
-          .limit(1)
-          .maybeSingle();
+    if (call.call_id) {
+      const {
+        data: possibleLead,
+        error: existingLeadError,
+      } = await supabaseServer
+        .from("leads")
+        .select("id")
+        .eq("user_id", CREWOS_USER_ID)
+        .eq("call_id", call.call_id)
+        .limit(1)
+        .maybeSingle();
 
       if (existingLeadError) {
         console.error(
@@ -430,12 +433,24 @@ ${transcript}
       existingLead = possibleLead;
     }
 
+    /*
+     * ============================================================
+     * IF LEAD ALREADY EXISTS
+     * ============================================================
+     */
+
     if (existingLead) {
       console.log(
         "⚠️ Lead already exists:",
         existingLead.id
       );
     } else {
+      /*
+       * ==========================================================
+       * INSERT NEW LEAD
+       * ==========================================================
+       */
+
       const { data: newLead, error: leadError } =
         await supabaseServer
           .from("leads")
@@ -443,6 +458,12 @@ ${transcript}
             user_id: CREWOS_USER_ID,
 
             user_email: CREWOS_USER_EMAIL,
+
+            /*
+             * IMPORTANT:
+             * Connect this CRM lead to the Retell call.
+             */
+            call_id: call.call_id,
 
             name:
               ai.customer_name ??
@@ -474,13 +495,15 @@ ${transcript}
       console.dir(newLead, { depth: null });
 
       if (leadError) {
-        console.error("========== LEAD INSERT ERROR ==========");
+        console.error(
+          "========== LEAD INSERT ERROR =========="
+        );
         console.error(leadError);
 
         /*
          * The call itself was successfully saved.
-         * We return the error so we can see exactly what is wrong
-         * with the leads table if the insert fails.
+         * Return the lead error so we can see exactly
+         * what is wrong with the leads table.
          */
 
         return NextResponse.json(

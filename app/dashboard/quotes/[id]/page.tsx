@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase-server";
 import PrintButton from "@/components/quotes/print-button";
 import SendQuoteButton from "@/components/quotes/send-quote-button";
+import { capitalizeFirst } from "@/lib/format-text";
 
 type Props = {
   params: Promise<{
@@ -18,8 +19,10 @@ type Quote = {
   phone?: string | null;
   service?: string | null;
   city?: string | null;
+  state?: string | null;
   customer_type?: string | null;
   notes?: string | null;
+  description?: string | null;
   length?: number | null;
   width?: number | null;
   square_feet?: number | null;
@@ -39,6 +42,18 @@ function money(value: number | null | undefined) {
   })}`;
 }
 
+function formatPhone(phone?: string | null) {
+  if (!phone) return "—";
+
+  const digits = phone.replace(/\D/g, "");
+
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+
+  return phone;
+}
+
 export default async function QuotePage({ params }: Props) {
   const { id } = await params;
 
@@ -53,6 +68,15 @@ export default async function QuotePage({ params }: Props) {
   }
 
   const quote = data as Quote;
+
+  const customerName =
+    capitalizeFirst(quote.customer_name) || "Customer";
+
+  const serviceName =
+    capitalizeFirst(quote.service) || "Service";
+
+  const customerType =
+    capitalizeFirst(quote.customer_type) || "—";
 
   const createdDate = quote.created_at
     ? new Date(quote.created_at).toLocaleDateString("en-US", {
@@ -95,10 +119,12 @@ export default async function QuotePage({ params }: Props) {
 
           {/* Screen Header */}
           <div className="flex flex-col justify-between gap-6 md:flex-row md:items-center print:hidden">
+
             <div>
+              {/* Back to Quotes */}
               <Link
                 href="/dashboard/quotes"
-                className="text-sm font-medium text-blue-600 transition hover:text-blue-700"
+                className="inline-flex items-center text-sm font-medium text-slate-500 transition hover:text-slate-900"
               >
                 ← Back to Quotes
               </Link>
@@ -112,7 +138,9 @@ export default async function QuotePage({ params }: Props) {
               </p>
             </div>
 
-            <div className="flex items-center gap-3">
+            {/* Actions */}
+            <div className="flex flex-wrap items-center gap-3">
+
               <Link
                 href={`/dashboard/quotes/${quote.id}/edit`}
                 className="rounded-xl border border-slate-300 bg-white px-5 py-3 font-semibold text-slate-700 transition hover:bg-slate-50"
@@ -121,13 +149,14 @@ export default async function QuotePage({ params }: Props) {
               </Link>
 
               <SendQuoteButton
-                customerName={quote.customer_name || "Customer"}
+                customerName={customerName}
                 phone={quote.phone}
                 total={Number(quote.total_price ?? 0)}
                 quoteUrl={`https://crewpilot-taupe.vercel.app/q/${quote.id}`}
               />
 
               <PrintButton />
+
             </div>
           </div>
 
@@ -137,6 +166,7 @@ export default async function QuotePage({ params }: Props) {
             {/* Print Header */}
             <div className="hidden border-b border-slate-200 px-7 py-4 print:block">
               <div className="flex items-start justify-between">
+
                 <div>
                   <h1 className="text-2xl font-bold text-slate-900">
                     Loadstar Trucking
@@ -156,60 +186,70 @@ export default async function QuotePage({ params }: Props) {
                     {createdDate}
                   </p>
                 </div>
+
               </div>
             </div>
 
             {/* Estimate Header */}
             <div className="border-b border-slate-200 px-7 py-5 print:px-7 print:py-4">
+
               <div className="flex items-start justify-between gap-6">
+
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Estimate
                   </p>
 
                   <h2 className="mt-1 text-2xl font-bold text-slate-900 print:text-xl">
-                    {quote.customer_name || "Customer"}
+                    {customerName}
                   </h2>
 
                   <p className="mt-1 text-sm text-slate-500">
-                    {quote.service
-                      ? quote.service.charAt(0).toUpperCase() +
-                        quote.service.slice(1)
-                      : "Service"}
+                    {serviceName}
                   </p>
                 </div>
 
                 <div className="text-right">
+
                   <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700 print:bg-transparent print:p-0 print:text-slate-700">
-                    {quote.status || "Draft"}
+                    {capitalizeFirst(quote.status) || "Draft"}
                   </span>
 
                   <div className="mt-2 text-2xl font-bold text-blue-600 print:text-xl">
                     {money(quote.total_price)}
                   </div>
+
                 </div>
+
               </div>
+
             </div>
 
             {/* Customer */}
             <div className="grid grid-cols-2 gap-8 border-b border-slate-200 px-7 py-5 print:px-7 print:py-4">
+
               <div>
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                   Customer
                 </h3>
 
                 <div className="mt-2 space-y-1">
+
                   <p className="text-base font-semibold text-slate-900">
-                    {quote.customer_name || "—"}
+                    {customerName}
                   </p>
 
                   <p className="text-sm text-slate-600">
-                    {quote.phone || "No phone number"}
+                    {formatPhone(quote.phone)}
                   </p>
 
                   <p className="text-sm text-slate-600">
-                    {quote.city || "No city provided"}
+                    {capitalizeFirst(quote.city) || "No city provided"}
+                    {quote.state
+                      ? `, ${quote.state.toUpperCase()}`
+                      : ""}
                   </p>
+
                 </div>
               </div>
 
@@ -219,28 +259,28 @@ export default async function QuotePage({ params }: Props) {
                 </h3>
 
                 <p className="mt-2 text-base font-semibold text-slate-900">
-                  {quote.customer_type || "—"}
+                  {customerType}
                 </p>
               </div>
+
             </div>
 
             {/* Service Details */}
             <div className="border-b border-slate-200 px-7 py-5 print:px-7 print:py-4">
+
               <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Service Details
               </h3>
 
               <div className="mt-3 grid grid-cols-4 gap-5">
+
                 <div>
                   <p className="text-xs text-slate-500">
                     Service
                   </p>
 
                   <p className="mt-1 text-sm font-semibold text-slate-900">
-                    {quote.service
-                      ? quote.service.charAt(0).toUpperCase() +
-                        quote.service.slice(1)
-                      : "—"}
+                    {serviceName}
                   </p>
                 </div>
 
@@ -273,16 +313,32 @@ export default async function QuotePage({ params }: Props) {
                     {squareFeet.toLocaleString()} sq ft
                   </p>
                 </div>
+
               </div>
+
+              {quote.description && (
+                <div className="mt-5">
+                  <p className="text-xs text-slate-500">
+                    Description
+                  </p>
+
+                  <p className="mt-1 whitespace-pre-wrap text-sm font-medium text-slate-900">
+                    {quote.description}
+                  </p>
+                </div>
+              )}
+
             </div>
 
             {/* Pricing */}
             <div className="border-b border-slate-200 px-7 py-5 print:px-7 print:py-4">
+
               <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Pricing
               </h3>
 
               <div className="mt-3 max-w-xl space-y-2">
+
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600">
                     Price / Sq Ft
@@ -295,10 +351,7 @@ export default async function QuotePage({ params }: Props) {
 
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-600">
-                    {quote.service
-                      ? quote.service.charAt(0).toUpperCase() +
-                        quote.service.slice(1)
-                      : "Service"}
+                    {serviceName}
                   </span>
 
                   <span className="font-medium text-slate-900">
@@ -337,6 +390,7 @@ export default async function QuotePage({ params }: Props) {
                 </div>
 
                 <div className="flex justify-between border-t border-slate-200 pt-2 text-lg font-bold">
+
                   <span className="text-slate-900">
                     Total
                   </span>
@@ -344,26 +398,33 @@ export default async function QuotePage({ params }: Props) {
                   <span className="text-blue-600">
                     {money(quote.total_price)}
                   </span>
+
                 </div>
+
               </div>
             </div>
 
             {/* Notes */}
             <div className="px-7 py-5 print:px-7 print:py-4">
+
               <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                 Notes
               </h3>
 
               <div className="mt-2 rounded-lg bg-slate-50 p-3 print:bg-white print:p-0">
+
                 <p className="whitespace-pre-wrap text-xs leading-relaxed text-slate-700">
                   {quote.notes || "No notes added."}
                 </p>
+
               </div>
             </div>
 
             {/* Footer */}
             <div className="hidden border-t border-slate-200 px-7 py-3 print:block">
+
               <div className="flex justify-between text-[10px] text-slate-400">
+
                 <span>
                   Loadstar Trucking
                 </span>
@@ -371,7 +432,9 @@ export default async function QuotePage({ params }: Props) {
                 <span>
                   Estimate #{quote.id.slice(0, 8)}
                 </span>
+
               </div>
+
             </div>
 
           </div>

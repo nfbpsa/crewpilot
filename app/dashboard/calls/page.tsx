@@ -1,6 +1,63 @@
 import Link from "next/link";
 import { supabaseServer } from "@/lib/supabase-server";
 
+function capitalizeWords(value: string | null) {
+  if (!value) return "—";
+
+  return value
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function phoneWordsToDigits(value: string) {
+  const numberWords: Record<string, string> = {
+    zero: "0",
+    oh: "0",
+    one: "1",
+    two: "2",
+    three: "3",
+    four: "4",
+    five: "5",
+    six: "6",
+    seven: "7",
+    eight: "8",
+    nine: "9",
+  };
+
+  const words = value
+    .toLowerCase()
+    .replace(/[-.,()]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+
+  const converted = words
+    .map((word) => numberWords[word] ?? word)
+    .join("");
+
+  return converted;
+}
+
+function formatPhone(phone: string | null) {
+  if (!phone) return "—";
+
+  const convertedPhone = phoneWordsToDigits(phone);
+
+  const digits = convertedPhone.replace(/\D/g, "");
+
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+
+  if (digits.length === 11 && digits.startsWith("1")) {
+    return `(${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
+  }
+
+  return phone;
+}
+
 function formatDate(value: string | null) {
   if (!value) return "—";
 
@@ -17,10 +74,13 @@ function priorityStyles(priority: string | null) {
   switch ((priority ?? "").toLowerCase()) {
     case "high":
       return "bg-red-100 text-red-700";
+
     case "medium":
       return "bg-amber-100 text-amber-700";
+
     case "low":
       return "bg-slate-100 text-slate-600";
+
     default:
       return "bg-slate-100 text-slate-600";
   }
@@ -79,6 +139,7 @@ export default async function CallsPage() {
             </p>
           </div>
 
+          {/* Total Calls */}
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
             <p className="text-xs font-medium uppercase tracking-wide text-slate-400">
               Total Calls
@@ -154,11 +215,12 @@ export default async function CallsPage() {
                           className="block"
                         >
                           <p className="font-semibold text-slate-900 hover:text-blue-600">
-                            {call.caller_name || "Unknown Caller"}
+                            {capitalizeWords(call.caller_name) ||
+                              "Unknown Caller"}
                           </p>
 
-                          <p className="mt-1 text-sm text-slate-500">
-                            {call.phone || "No phone number"}
+                          <p className="mt-1 whitespace-nowrap text-sm text-slate-500">
+                            {formatPhone(call.phone)}
                           </p>
                         </Link>
                       </td>
@@ -170,10 +232,7 @@ export default async function CallsPage() {
                           className="block"
                         >
                           <p className="font-medium text-slate-900">
-                            {call.service
-                              ? call.service.charAt(0).toUpperCase() +
-                                call.service.slice(1)
-                              : "—"}
+                            {capitalizeWords(call.service)}
                           </p>
 
                           {call.summary && (
@@ -192,8 +251,11 @@ export default async function CallsPage() {
                         >
                           <p className="text-sm text-slate-700">
                             {call.city || call.state
-                              ? [call.city, call.state]
-                                  .filter(Boolean)
+                              ? [
+                                  capitalizeWords(call.city),
+                                  capitalizeWords(call.state),
+                                ]
+                                  .filter((value) => value !== "—")
                                   .join(", ")
                               : "—"}
                           </p>
@@ -207,7 +269,7 @@ export default async function CallsPage() {
                           className="block"
                         >
                           <span className="text-sm text-slate-700">
-                            {call.customer_type || "—"}
+                            {capitalizeWords(call.customer_type)}
                           </span>
                         </Link>
                       </td>
@@ -235,7 +297,9 @@ export default async function CallsPage() {
                               call.lead_priority
                             )}`}
                           >
-                            {call.lead_priority || "Unscored"}
+                            {call.lead_priority
+                              ? capitalizeWords(call.lead_priority)
+                              : "Unscored"}
                           </span>
                         </Link>
                       </td>
@@ -247,7 +311,9 @@ export default async function CallsPage() {
                           className="block"
                         >
                           <span className="inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
-                            {call.status || "New Lead"}
+                            {call.status
+                              ? capitalizeWords(call.status)
+                              : "New Lead"}
                           </span>
                         </Link>
                       </td>
@@ -273,7 +339,7 @@ export default async function CallsPage() {
               </div>
 
               <h3 className="mt-4 text-lg font-semibold text-slate-900">
-                No calls yet
+                No Calls Yet
               </h3>
 
               <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
