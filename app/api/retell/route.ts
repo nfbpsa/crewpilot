@@ -67,19 +67,17 @@ export async function POST(req: Request) {
     // ============================================================
     // IMPORTANT
     //
-    // call_started does NOT have the completed transcript.
+    // ONLY call_analyzed is allowed to create/update a CRM lead.
     //
-    // We save the call if needed, but DO NOT create a CRM lead
-    // until we have the completed conversation.
+    // Earlier Retell events may not contain the completed transcript
+    // or completed AI analysis.
     // ============================================================
 
     const hasCompletedConversation =
       transcript.trim().length > 20;
 
     const isFinalEvent =
-      event === "call_ended" ||
-      event === "call_analyzed" ||
-      event === "transcript_updated";
+      event === "call_analyzed";
 
     // ============================================================
     // AI EXTRACTION DEFAULTS
@@ -371,7 +369,10 @@ ${transcript}
           console.error("NAME:", err.name);
           console.error("STACK:", err.stack);
         } else {
-          console.error("RAW ERROR:", JSON.stringify(err, null, 2));
+          console.error(
+            "RAW ERROR:",
+            JSON.stringify(err, null, 2)
+          );
         }
 
         return NextResponse.json(
@@ -393,16 +394,16 @@ ${transcript}
     }
 
     // ============================================================
-    // CALL STARTED
+    // NON-FINAL RETELL EVENTS
     //
-    // DO NOT CREATE LEAD HERE.
+    // DO NOT CREATE A CRM LEAD HERE.
     //
-    // There is no completed transcript yet.
+    // Only call_analyzed can create/update a lead.
     // ============================================================
 
-    if (!hasCompletedConversation) {
+    if (!isFinalEvent || !hasCompletedConversation) {
       console.log(
-        "========== NO COMPLETED TRANSCRIPT =========="
+        "========== WAITING FOR FINAL CALL ANALYSIS =========="
       );
 
       console.log(
@@ -416,7 +417,7 @@ ${transcript}
         success: true,
         call_saved: false,
         lead_created: false,
-        waiting_for_transcript: true,
+        waiting_for_analysis: true,
         call_id: call.call_id,
       });
     }
@@ -638,10 +639,8 @@ ${transcript}
     // ============================================================
     // UPDATE EXISTING LEAD
     //
-    // This is the important fix.
-    //
-    // If call_started created anything previously,
-    // call_ended/call_analyzed now UPDATES it.
+    // If a placeholder lead somehow exists from an older version,
+    // update it with the completed AI information.
     // ============================================================
 
     if (existingLead) {
@@ -785,4 +784,3 @@ ${transcript}
     );
   }
 }
-
