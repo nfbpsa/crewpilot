@@ -34,9 +34,11 @@ export async function POST(req: Request) {
     const body = await req.json();
 
     console.log("========== RETELL WEBHOOK ==========");
+    console.log("EVENT:", body.event);
     console.log(JSON.stringify(body, null, 2));
 
     const call = body.call;
+    const event = body.event;
 
     if (!call) {
       console.log("No call object found.");
@@ -50,13 +52,34 @@ export async function POST(req: Request) {
     // BASIC CALL DATA
     // ============================================================
 
-    const transcript = call.transcript ?? "";
+    const transcript =
+      typeof call.transcript === "string"
+        ? call.transcript
+        : "";
 
     console.log("========== CALL DATA ==========");
+    console.log("Event:", event);
     console.log("Call ID:", call.call_id);
     console.log("Caller:", call.caller_name);
     console.log("From:", call.from_number);
     console.log("Transcript length:", transcript.length);
+
+    // ============================================================
+    // IMPORTANT
+    //
+    // call_started does NOT have the completed transcript.
+    //
+    // We save the call if needed, but DO NOT create a CRM lead
+    // until we have the completed conversation.
+    // ============================================================
+
+    const hasCompletedConversation =
+      transcript.trim().length > 20;
+
+    const isFinalEvent =
+      event === "call_ended" ||
+      event === "call_analyzed" ||
+      event === "transcript_updated";
 
     // ============================================================
     // AI EXTRACTION DEFAULTS
@@ -98,45 +121,108 @@ export async function POST(req: Request) {
     // AI EXTRACTION
     // ============================================================
 
-    if (!process.env.OPENAI_API_KEY) {
-      console.error("❌ OPENAI_API_KEY missing");
-    }
-
-    if (transcript.length > 20 && process.env.OPENAI_API_KEY) {
+    if (
+      hasCompletedConversation &&
+      process.env.OPENAI_API_KEY
+    ) {
       try {
-        console.log("Calling OpenAI...");
-        console.log("🚀 USING FULL LEAD JSON SCHEMA");
+        console.log("========== CALLING OPENAI ==========");
+        console.log("Using completed transcript.");
 
         const response = await openai.responses.create({
           model: "gpt-5.5",
 
           input: `
-You extract structured lead information from contractor phone calls.
+You are extracting structured CRM lead information from a contractor phone call.
 
-Read the transcript carefully and extract as much information as the caller actually provides.
+Read the entire transcript carefully.
 
-IMPORTANT:
+Your job is to extract ONLY information that the customer actually provided.
 
-- Do not invent information.
-- If a field is not mentioned, return null.
-- Keep phone numbers exactly as provided when possible.
-- Keep addresses accurate.
-- estimated_job_value should be the customer's estimated job value or expected project value if discussed.
-- budget should contain the customer's stated budget or budget range if discussed.
-- callback_time should contain the requested callback time if discussed.
-- decision_maker should indicate whether the caller is the decision maker if this can be determined.
-- priority should describe the urgency expressed by the customer.
-- next_action should describe the logical next step from the conversation.
-- summary should be a concise summary of the call.
-- timeline should describe when the customer wants the work done.
-- service should identify the service requested.
-- project_type should describe the type of project.
-- customer_type should be residential, commercial, or another type when clear.
-- materials should contain materials discussed or requested.
+DO NOT invent information.
 
-Return only the structured information requested by the schema.
+If information is not present, return null.
 
-Transcript:
+IMPORTANT EXTRACTION RULES:
+
+CUSTOMER NAME
+- Extract the customer's real name when they state it.
+- Do not use "Unknown Customer" as the extracted name.
+- If they never give their name, return null.
+
+PHONE
+- Extract the customer's phone number if they provide one.
+- If they do not verbally provide a phone number, return null.
+- The system may separately know the caller's phone number.
+
+EMAIL
+- Extract the email if provided.
+
+ADDRESS
+- Extract street address.
+- Extract city.
+- Extract state.
+- Extract ZIP code.
+- Keep the address accurate.
+- Do not invent missing address information.
+
+SERVICE
+- Identify the contractor service requested.
+- Examples:
+  - sealcoating
+  - roofing
+  - junk removal
+  - landscaping
+  - pressure washing
+  - concrete
+  - driveway repair
+- Use the service actually discussed.
+
+PROJECT TYPE
+- Describe the actual project.
+
+CUSTOMER TYPE
+- residential
+- commercial
+- other
+- null if unclear
+
+BUDGET
+- Extract any budget or price range the customer mentions.
+
+CALLBACK TIME
+- Extract requested callback timing if mentioned.
+
+DECISION MAKER
+- Determine whether the caller is the decision maker if this can reasonably be determined.
+
+MATERIALS
+- Extract materials discussed.
+
+ESTIMATED JOB VALUE
+- Extract a project value if discussed.
+- If the contractor gave a price or estimate, capture it.
+- Do not invent a price.
+
+PRIORITY
+- Describe urgency.
+- Examples:
+  - emergency
+  - urgent
+  - high
+  - normal
+  - low
+
+NEXT ACTION
+- Describe the logical next step from the call.
+
+SUMMARY
+- Give a concise summary of the customer's request.
+
+TIMELINE
+- Extract when the customer wants the work completed.
+
+TRANSCRIPT:
 
 ${transcript}
 `,
@@ -266,9 +352,6 @@ ${transcript}
         });
 
         console.log("========== OPENAI RESPONSE ==========");
-        console.dir(response, { depth: null });
-
-        console.log("========== OUTPUT TEXT ==========");
         console.log(response.output_text);
 
         if (response.output_text) {
@@ -284,6 +367,39 @@ ${transcript}
         console.error("========== OPENAI ERROR ==========");
         console.error(err);
       }
+    } else {
+      console.log(
+        "Skipping AI extraction because transcript is not ready."
+      );
+    }
+
+    // ============================================================
+    // CALL STARTED
+    //
+    // DO NOT CREATE LEAD HERE.
+    //
+    // There is no completed transcript yet.
+    // ============================================================
+
+    if (!hasCompletedConversation) {
+      console.log(
+        "========== NO COMPLETED TRANSCRIPT =========="
+      );
+
+      console.log(
+        "Event:",
+        event,
+        "| Transcript length:",
+        transcript.length
+      );
+
+      return NextResponse.json({
+        success: true,
+        call_saved: false,
+        lead_created: false,
+        waiting_for_transcript: true,
+        call_id: call.call_id,
+      });
     }
 
     // ============================================================
@@ -302,7 +418,7 @@ ${transcript}
     console.log(leadScore);
 
     // ============================================================
-    // SAVE CALL
+    // SAVE / UPDATE CALL
     // ============================================================
 
     console.log("========== SAVING CALL ==========");
@@ -345,7 +461,8 @@ ${transcript}
 
             materials: ai.materials,
 
-            estimated_job_value: ai.estimated_job_value,
+            estimated_job_value:
+              ai.estimated_job_value,
 
             priority: ai.priority,
             next_action: ai.next_action,
@@ -374,7 +491,10 @@ ${transcript}
     console.dir(savedCall, { depth: null });
 
     if (callError) {
-      console.error("========== SUPABASE CALL ERROR ==========");
+      console.error(
+        "========== SUPABASE CALL ERROR =========="
+      );
+
       console.error(callError);
 
       return NextResponse.json(
@@ -391,16 +511,8 @@ ${transcript}
     console.log("✅ Call saved successfully");
 
     // ============================================================
-    // CREATE LEAD
+    // CREWOS USER
     // ============================================================
-
-    console.log("========== CREATING LEAD ==========");
-
-    // ------------------------------------------------------------
-    // IMPORTANT:
-    // Explicitly define the CrewOS user ID before inserting.
-    // This prevents the leads.user_id value from being null.
-    // ------------------------------------------------------------
 
     const leadUserId = CREWOS_USER_ID;
     const leadUserEmail = CREWOS_USER_EMAIL;
@@ -408,23 +520,6 @@ ${transcript}
     console.log("========== LEAD OWNER ==========");
     console.log("user_id:", leadUserId);
     console.log("user_email:", leadUserEmail);
-
-    // Safety check
-    if (!leadUserId) {
-      console.error("❌ CREWOS_USER_ID is missing.");
-
-      return NextResponse.json(
-        {
-          success: false,
-          call_saved: true,
-          lead_created: false,
-          error: "CREWOS_USER_ID is missing.",
-        },
-        {
-          status: 500,
-        }
-      );
-    }
 
     // ============================================================
     // BUILD ADDRESS
@@ -443,17 +538,20 @@ ${transcript}
         : null;
 
     // ============================================================
-    // CONVERT ESTIMATE TO NUMBER
+    // ESTIMATE
     // ============================================================
 
     const estimateNumber = ai.estimated_job_value
       ? Number(
-          ai.estimated_job_value.replace(/[^0-9.]/g, "")
+          ai.estimated_job_value.replace(
+            /[^0-9.]/g,
+            ""
+          )
         )
       : 0;
 
     // ============================================================
-    // CHECK FOR EXISTING LEAD
+    // FIND EXISTING LEAD
     // ============================================================
 
     let existingLead = null;
@@ -481,80 +579,85 @@ ${transcript}
     }
 
     // ============================================================
-    // IF LEAD ALREADY EXISTS
+    // LEAD DATA
+    // ============================================================
+
+    const leadData = {
+      user_id: leadUserId,
+
+      user_email: leadUserEmail,
+
+      call_id: call.call_id,
+
+      name:
+        ai.customer_name ??
+        call.caller_name ??
+        null,
+
+      service: ai.service,
+
+      status: ai.status ?? "New Lead",
+
+      phone:
+        ai.phone ??
+        call.from_number ??
+        null,
+
+      email: ai.email,
+
+      address,
+
+      estimate:
+        Number.isFinite(estimateNumber)
+          ? estimateNumber
+          : 0,
+    };
+
+    console.log("========== FINAL LEAD DATA ==========");
+    console.dir(leadData, { depth: null });
+
+    // ============================================================
+    // UPDATE EXISTING LEAD
+    //
+    // This is the important fix.
+    //
+    // If call_started created anything previously,
+    // call_ended/call_analyzed now UPDATES it.
     // ============================================================
 
     if (existingLead) {
       console.log(
-        "⚠️ Lead already exists:",
+        "========== UPDATING EXISTING LEAD =========="
+      );
+
+      console.log(
+        "Existing lead:",
         existingLead.id
       );
-    } else {
-      // ============================================================
-      // INSERT NEW LEAD
-      // ============================================================
 
-      console.log("========== INSERTING LEAD ==========");
+      const {
+        data: updatedLead,
+        error: updateLeadError,
+      } = await supabaseServer
+        .from("leads")
+        .update(leadData)
+        .eq("id", existingLead.id)
+        .select()
+        .single();
 
-      const leadToInsert = {
-        // THIS IS THE IMPORTANT FIX
-        user_id: leadUserId,
-
-        user_email: leadUserEmail,
-
-        // Connect CRM lead to Retell call
-        call_id: call.call_id,
-
-        name:
-          ai.customer_name ??
-          call.caller_name ??
-          "Unknown Customer",
-
-        service: ai.service,
-
-        status: ai.status ?? "New Lead",
-
-        phone:
-          ai.phone ??
-          call.from_number ??
-          null,
-
-        email: ai.email,
-
-        address,
-
-        estimate:
-          Number.isFinite(estimateNumber)
-            ? estimateNumber
-            : 0,
-      };
-
-      console.log("========== LEAD PAYLOAD ==========");
-      console.dir(leadToInsert, { depth: null });
-
-      const { data: newLead, error: leadError } =
-        await supabaseServer
-          .from("leads")
-          .insert(leadToInsert)
-          .select()
-          .single();
-
-      console.log("========== NEW LEAD ==========");
-      console.dir(newLead, { depth: null });
-
-      if (leadError) {
+      if (updateLeadError) {
         console.error(
-          "========== LEAD INSERT ERROR =========="
+          "========== LEAD UPDATE ERROR =========="
         );
 
-        console.error(leadError);
+        console.error(updateLeadError);
 
         return NextResponse.json(
           {
             success: false,
             call_saved: true,
             lead_created: false,
-            error: leadError.message,
+            error: updateLeadError.message,
           },
           {
             status: 500,
@@ -562,8 +665,67 @@ ${transcript}
         );
       }
 
-      console.log("✅ Lead created successfully");
+      console.log("========== UPDATED LEAD ==========");
+      console.dir(updatedLead, { depth: null });
+
+      console.log("✅ Existing lead updated successfully");
+
+      return NextResponse.json({
+        success: true,
+        call_saved: true,
+        lead_created: true,
+        lead_updated: true,
+
+        lead_score: leadScore.score,
+        lead_priority: leadScore.priority,
+
+        call_id: call.call_id,
+
+        lead_id: updatedLead.id,
+      });
     }
+
+    // ============================================================
+    // CREATE NEW LEAD
+    // ============================================================
+
+    console.log(
+      "========== CREATING NEW LEAD =========="
+    );
+
+    const {
+      data: newLead,
+      error: leadError,
+    } = await supabaseServer
+      .from("leads")
+      .insert(leadData)
+      .select()
+      .single();
+
+    if (leadError) {
+      console.error(
+        "========== LEAD INSERT ERROR =========="
+      );
+
+      console.error(leadError);
+
+      return NextResponse.json(
+        {
+          success: false,
+          call_saved: true,
+          lead_created: false,
+          error: leadError.message,
+        },
+        {
+          status: 500,
+        }
+      );
+    }
+
+    console.log("========== NEW LEAD ==========");
+    console.dir(newLead, { depth: null });
+
+    console.log("✅ New lead created successfully");
 
     // ============================================================
     // SUCCESS
@@ -571,13 +733,20 @@ ${transcript}
 
     return NextResponse.json({
       success: true,
+
       call_saved: true,
+
       lead_created: true,
 
+      lead_updated: false,
+
       lead_score: leadScore.score,
+
       lead_priority: leadScore.priority,
 
       call_id: call.call_id,
+
+      lead_id: newLead.id,
     });
   } catch (err) {
     console.error("========== SERVER ERROR ==========");
@@ -586,6 +755,10 @@ ${transcript}
     return NextResponse.json(
       {
         success: false,
+        error:
+          err instanceof Error
+            ? err.message
+            : "Unknown server error",
       },
       {
         status: 500,
