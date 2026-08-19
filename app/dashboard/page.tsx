@@ -6,13 +6,18 @@ import RealtimeDashboard from "@/app/components/dashboard/realtime-dashboard";
 
 import { supabaseServer } from "@/lib/supabase-server";
 
+// Always fetch fresh data from Supabase.
+// Do not allow Next.js/Vercel to cache the dashboard.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 type Lead = {
   id: string;
   name: string | null;
   phone: string | null;
   service: string | null;
   status: string | null;
-  lead_score?: number | null;
+  lead_score: number;
   created_at: string;
 };
 
@@ -21,9 +26,6 @@ export default async function DashboardPage() {
    * ==========================================
    * CALLS
    * ==========================================
-   *
-   * Calls = actual phone calls handled
-   * by the AI receptionist.
    */
 
   const { data: calls, error: callsError } =
@@ -47,8 +49,6 @@ export default async function DashboardPage() {
    * ==========================================
    * LEADS
    * ==========================================
-   *
-   * Leads = actual CRM customers/leads.
    */
 
   const { data: leadData, error: leadsError } =
@@ -76,12 +76,6 @@ export default async function DashboardPage() {
    * ==========================================
    * MATCH CALLS TO LEADS
    * ==========================================
-   *
-   * leads.call_id matches calls.call_id.
-   *
-   * This lets us get the AI score from the
-   * calls table while still using leads.id
-   * as the CRM lead ID.
    */
 
   const callsByCallId = new Map(
@@ -91,24 +85,21 @@ export default async function DashboardPage() {
     ])
   );
 
-  const leads: Lead[] = (leadData ?? []).map(
-    (lead) => {
-      const matchingCall = lead.call_id
-        ? callsByCallId.get(lead.call_id)
-        : undefined;
+  const leads: Lead[] = (leadData ?? []).map((lead) => {
+    const matchingCall = lead.call_id
+      ? callsByCallId.get(lead.call_id)
+      : undefined;
 
-      return {
-        id: lead.id,
-        name: lead.name,
-        phone: lead.phone,
-        service: lead.service,
-        status: lead.status,
-        lead_score:
-          matchingCall?.lead_score ?? 0,
-        created_at: lead.created_at,
-      };
-    }
-  );
+    return {
+      id: lead.id,
+      name: lead.name,
+      phone: lead.phone,
+      service: lead.service,
+      status: lead.status,
+      lead_score: matchingCall?.lead_score ?? 0,
+      created_at: lead.created_at,
+    };
+  });
 
   /*
    * ==========================================
@@ -118,11 +109,11 @@ export default async function DashboardPage() {
 
   const today = new Date().toDateString();
 
-  const todaysCalls = (calls ?? []).filter(
-    (call) =>
-      new Date(call.created_at).toDateString() ===
-      today
-  ).length;
+  const todaysCalls = (calls ?? []).filter((call) => {
+    return (
+      new Date(call.created_at).toDateString() === today
+    );
+  }).length;
 
   /*
    * ==========================================
@@ -166,8 +157,31 @@ export default async function DashboardPage() {
    */
 
   const hotLeads = leads.filter(
-    (lead) => (lead.lead_score ?? 0) >= 90
+    (lead) => lead.lead_score >= 90
   ).length;
+
+  /*
+   * ==========================================
+   * DEBUG
+   * ==========================================
+   *
+   * These numbers should be:
+   *
+   * Calls: 0
+   * Leads: 0
+   *
+   * immediately after we cleared Supabase.
+   */
+
+  console.log("=================================");
+  console.log("CREWPILOT DASHBOARD DATA");
+  console.log("Calls:", calls?.length ?? 0);
+  console.log("Leads:", leads.length);
+  console.log("Today's calls:", todaysCalls);
+  console.log("New leads:", newLeads);
+  console.log("Won jobs:", wonJobs);
+  console.log("Hot leads:", hotLeads);
+  console.log("=================================");
 
   return (
     <div className="flex h-screen bg-slate-100">
@@ -180,12 +194,20 @@ export default async function DashboardPage() {
 
         <div className="mx-auto max-w-7xl space-y-6 px-8 py-6">
 
+          {/* ================================
+              STATS
+              ================================ */}
+
           <Stats
             todaysCalls={todaysCalls}
             newLeads={newLeads}
             wonJobs={wonJobs}
             hotLeads={hotLeads}
           />
+
+          {/* ================================
+              RECENT LEADS
+              ================================ */}
 
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 
