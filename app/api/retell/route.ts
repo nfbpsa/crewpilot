@@ -365,7 +365,26 @@ ${transcript}
         console.dir(ai, { depth: null });
       } catch (err) {
         console.error("========== OPENAI ERROR ==========");
-        console.error(err);
+
+        if (err instanceof Error) {
+          console.error("MESSAGE:", err.message);
+          console.error("NAME:", err.name);
+          console.error("STACK:", err.stack);
+        } else {
+          console.error("RAW ERROR:", JSON.stringify(err, null, 2));
+        }
+
+        return NextResponse.json(
+          {
+            success: false,
+            error: "OpenAI extraction failed",
+            details:
+              err instanceof Error
+                ? err.message
+                : "Unknown OpenAI error",
+          },
+          { status: 500 }
+        );
       }
     } else {
       console.log(
@@ -766,3 +785,4 @@ ${transcript}
     );
   }
 }
+
