@@ -7,9 +7,16 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Your CrewOS account
+// ============================================================
+// CREWOS ACCOUNT
+// ============================================================
+
 const CREWOS_USER_ID = "51366006-9380-4040-8acd-f930c90dafe0";
 const CREWOS_USER_EMAIL = "rprofits@hotmail.com";
+
+// ============================================================
+// GET
+// ============================================================
 
 export async function GET() {
   return NextResponse.json({
@@ -17,6 +24,10 @@ export async function GET() {
     message: "CrewPilot Retell webhook is live.",
   });
 }
+
+// ============================================================
+// POST - RETELL WEBHOOK
+// ============================================================
 
 export async function POST(req: Request) {
   try {
@@ -29,10 +40,27 @@ export async function POST(req: Request) {
 
     if (!call) {
       console.log("No call object found.");
-      return NextResponse.json({ success: true });
+
+      return NextResponse.json({
+        success: true,
+      });
     }
 
+    // ============================================================
+    // BASIC CALL DATA
+    // ============================================================
+
     const transcript = call.transcript ?? "";
+
+    console.log("========== CALL DATA ==========");
+    console.log("Call ID:", call.call_id);
+    console.log("Caller:", call.caller_name);
+    console.log("From:", call.from_number);
+    console.log("Transcript length:", transcript.length);
+
+    // ============================================================
+    // AI EXTRACTION DEFAULTS
+    // ============================================================
 
     let ai = {
       customer_name: null as string | null,
@@ -66,11 +94,9 @@ export async function POST(req: Request) {
       status: "New Lead",
     };
 
-    /*
-     * ============================================================
-     * AI EXTRACTION
-     * ============================================================
-     */
+    // ============================================================
+    // AI EXTRACTION
+    // ============================================================
 
     if (!process.env.OPENAI_API_KEY) {
       console.error("❌ OPENAI_API_KEY missing");
@@ -120,6 +146,7 @@ ${transcript}
               type: "json_schema",
               name: "contractor_lead",
               strict: true,
+
               schema: {
                 type: "object",
                 additionalProperties: false,
@@ -259,11 +286,9 @@ ${transcript}
       }
     }
 
-    /*
-     * ============================================================
-     * LEAD SCORE
-     * ============================================================
-     */
+    // ============================================================
+    // LEAD SCORE
+    // ============================================================
 
     const leadScore = calculateLeadScore({
       timeline: ai.timeline,
@@ -276,11 +301,9 @@ ${transcript}
     console.log("========== LEAD SCORE ==========");
     console.log(leadScore);
 
-    /*
-     * ============================================================
-     * SAVE CALL TO SUPABASE
-     * ============================================================
-     */
+    // ============================================================
+    // SAVE CALL
+    // ============================================================
 
     console.log("========== SAVING CALL ==========");
 
@@ -367,18 +390,46 @@ ${transcript}
 
     console.log("✅ Call saved successfully");
 
-    /*
-     * ============================================================
-     * CREATE LEAD
-     * ============================================================
-     *
-     * This creates the CRM lead and connects it directly
-     * to the Retell call using leads.call_id.
-     */
+    // ============================================================
+    // CREATE LEAD
+    // ============================================================
 
     console.log("========== CREATING LEAD ==========");
 
-    // Build the address for the leads table
+    // ------------------------------------------------------------
+    // IMPORTANT:
+    // Explicitly define the CrewOS user ID before inserting.
+    // This prevents the leads.user_id value from being null.
+    // ------------------------------------------------------------
+
+    const leadUserId = CREWOS_USER_ID;
+    const leadUserEmail = CREWOS_USER_EMAIL;
+
+    console.log("========== LEAD OWNER ==========");
+    console.log("user_id:", leadUserId);
+    console.log("user_email:", leadUserEmail);
+
+    // Safety check
+    if (!leadUserId) {
+      console.error("❌ CREWOS_USER_ID is missing.");
+
+      return NextResponse.json(
+        {
+          success: false,
+          call_saved: true,
+          lead_created: false,
+          error: "CREWOS_USER_ID is missing.",
+        },
+        {
+          status: 500,
+        }
+      );
+    }
+
+    // ============================================================
+    // BUILD ADDRESS
+    // ============================================================
+
     const addressParts = [
       ai.street_address,
       ai.city,
@@ -391,23 +442,19 @@ ${transcript}
         ? addressParts.join(", ")
         : null;
 
-    // Convert estimated job value to a number when possible.
-    // Example: "$15,000" -> 15000
+    // ============================================================
+    // CONVERT ESTIMATE TO NUMBER
+    // ============================================================
+
     const estimateNumber = ai.estimated_job_value
       ? Number(
           ai.estimated_job_value.replace(/[^0-9.]/g, "")
         )
       : 0;
 
-    /*
-     * ============================================================
-     * CHECK FOR EXISTING LEAD
-     * ============================================================
-     *
-     * IMPORTANT:
-     * leads.call_id is now the proper connection between
-     * the calls table and the leads table.
-     */
+    // ============================================================
+    // CHECK FOR EXISTING LEAD
+    // ============================================================
 
     let existingLead = null;
 
@@ -418,7 +465,7 @@ ${transcript}
       } = await supabaseServer
         .from("leads")
         .select("id")
-        .eq("user_id", CREWOS_USER_ID)
+        .eq("user_id", leadUserId)
         .eq("call_id", call.call_id)
         .limit(1)
         .maybeSingle();
@@ -433,11 +480,9 @@ ${transcript}
       existingLead = possibleLead;
     }
 
-    /*
-     * ============================================================
-     * IF LEAD ALREADY EXISTS
-     * ============================================================
-     */
+    // ============================================================
+    // IF LEAD ALREADY EXISTS
+    // ============================================================
 
     if (existingLead) {
       console.log(
@@ -445,49 +490,52 @@ ${transcript}
         existingLead.id
       );
     } else {
-      /*
-       * ==========================================================
-       * INSERT NEW LEAD
-       * ==========================================================
-       */
+      // ============================================================
+      // INSERT NEW LEAD
+      // ============================================================
+
+      console.log("========== INSERTING LEAD ==========");
+
+      const leadToInsert = {
+        // THIS IS THE IMPORTANT FIX
+        user_id: leadUserId,
+
+        user_email: leadUserEmail,
+
+        // Connect CRM lead to Retell call
+        call_id: call.call_id,
+
+        name:
+          ai.customer_name ??
+          call.caller_name ??
+          "Unknown Customer",
+
+        service: ai.service,
+
+        status: ai.status ?? "New Lead",
+
+        phone:
+          ai.phone ??
+          call.from_number ??
+          null,
+
+        email: ai.email,
+
+        address,
+
+        estimate:
+          Number.isFinite(estimateNumber)
+            ? estimateNumber
+            : 0,
+      };
+
+      console.log("========== LEAD PAYLOAD ==========");
+      console.dir(leadToInsert, { depth: null });
 
       const { data: newLead, error: leadError } =
         await supabaseServer
           .from("leads")
-          .insert({
-            user_id: CREWOS_USER_ID,
-
-            user_email: CREWOS_USER_EMAIL,
-
-            /*
-             * IMPORTANT:
-             * Connect this CRM lead to the Retell call.
-             */
-            call_id: call.call_id,
-
-            name:
-              ai.customer_name ??
-              call.caller_name ??
-              "Unknown Customer",
-
-            service: ai.service,
-
-            status: ai.status ?? "New Lead",
-
-            phone:
-              ai.phone ??
-              call.from_number ??
-              null,
-
-            email: ai.email,
-
-            address,
-
-            estimate:
-              Number.isFinite(estimateNumber)
-                ? estimateNumber
-                : 0,
-          })
+          .insert(leadToInsert)
           .select()
           .single();
 
@@ -498,13 +546,8 @@ ${transcript}
         console.error(
           "========== LEAD INSERT ERROR =========="
         );
-        console.error(leadError);
 
-        /*
-         * The call itself was successfully saved.
-         * Return the lead error so we can see exactly
-         * what is wrong with the leads table.
-         */
+        console.error(leadError);
 
         return NextResponse.json(
           {
@@ -522,11 +565,9 @@ ${transcript}
       console.log("✅ Lead created successfully");
     }
 
-    /*
-     * ============================================================
-     * SUCCESS
-     * ============================================================
-     */
+    // ============================================================
+    // SUCCESS
+    // ============================================================
 
     return NextResponse.json({
       success: true,
